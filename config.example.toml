@@ -1,0 +1,25 @@
+telegram_bot_token = "REPLACE_ME"
+allowed_user_ids = [123456789]
+allowed_chat_ids = [123456789]
+
+allowed_repo_roots = [
+  "/home/me/dev",
+]
+
+blocked_paths = [
+  "/",
+  "/home/me/.ssh",
+  "/home/me/.aws",
+]
+
+runner_timeout_seconds = 180
+
+[safety]
+audit_enabled = true
+deny_destructive_prompts = true
+
+[codex]
+enabled = true
+
+[copilot]
+enabled = true

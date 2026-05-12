@@ -1,0 +1,19 @@
+[project]
+name = "telegram-ai-bridge"
+version = "0.1.0"
+description = "Telegram bridge for local Codex/Copilot sessions"
+requires-python = ">=3.11"
+dependencies = [
+  "python-telegram-bot[job-queue]>=21.0,<22.0",
+  "pexpect>=4.9.0",
+]
+
+[project.scripts]
+telegram-ai-bridge = "telegram_ai_bridge.main:cli"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["telegram_ai_bridge*"]

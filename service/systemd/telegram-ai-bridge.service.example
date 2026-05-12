@@ -1,0 +1,14 @@
+[Unit]
+Description=Telegram AI Bridge
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/path/to/AgentBridge
+ExecStart=/path/to/venv/bin/telegram-ai-bridge run --config /path/to/AgentBridge/config.toml
+Environment=PATH=/usr/local/bin:/usr/bin:/bin:/home/your-user/.nvm/versions/node/<version>/bin
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target
