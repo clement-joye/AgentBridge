@@ -97,12 +97,21 @@ class _DiscoveryStub:
         return sessions[:limit]
 
 
+class _FakeAppBot:
+    def __init__(self) -> None:
+        self.messages: list[tuple[int, str]] = []
+
+    async def send_message(self, chat_id: int, text: str) -> None:
+        self.messages.append((chat_id, text))
+
+
 class TelegramBotTests(unittest.IsolatedAsyncioTestCase):
-    def _make_bot(self, state_dir: Path) -> BridgeBot:
+    def _make_bot(self, state_dir: Path, security_alert_chat_ids: set[int] | None = None) -> BridgeBot:
         config = BridgeConfig(
             telegram_bot_token="test-token",
             allowed_user_ids={1},
             allowed_chat_ids={1},
+            security_alert_chat_ids=security_alert_chat_ids or set(),
             allowed_repo_roots=[],
             blocked_paths=[],
             codex=ProviderConfig(enabled=False),
@@ -170,6 +179,24 @@ class TelegramBotTests(unittest.IsolatedAsyncioTestCase):
                 update.message.sent,
                 ["Request denied by allowlist. Check `allowed_user_ids` and `allowed_chat_ids` in `config.toml`."],
             )
+
+    async def test_unauthorized_request_sends_security_alert(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            bot = self._make_bot(Path(d), security_alert_chat_ids={1, 2})
+            fake_bot = _FakeAppBot()
+            bot._application = SimpleNamespace(bot=fake_bot)
+            update = SimpleNamespace(
+                effective_user=SimpleNamespace(id=999),
+                effective_chat=SimpleNamespace(id=777),
+                message=_FakeMessage([object()]),
+            )
+
+            denied = await bot._deny_if_unauthorized(update)
+
+            self.assertTrue(denied)
+            self.assertEqual(len(fake_bot.messages), 2)
+            self.assertEqual(fake_bot.messages[0][0], 1)
+            self.assertIn("event: unauthorized_access", fake_bot.messages[0][1])
 
     async def test_use_updates_active_model_from_selected_session(self) -> None:
         with tempfile.TemporaryDirectory() as d:

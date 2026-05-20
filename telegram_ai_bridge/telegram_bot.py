@@ -88,6 +88,7 @@ class BridgeBot:
     def __init__(self, config: BridgeConfig, config_path: str | Path | None = None) -> None:
         self.config = config
         self._config_path: Path | None = Path(config_path) if config_path else None
+        self._application: Application | None = None
         self.db = Database(config.state_dir / "bridge.sqlite3")
         self.registry = SessionRegistry(self.db)
         self.active = ActiveSessionManager(self.db)
@@ -112,6 +113,7 @@ class BridgeBot:
         builder = Application.builder().token(self.config.telegram_bot_token)
         builder = builder.post_shutdown(self.on_shutdown)
         app = builder.build()
+        self._application = app
         app.add_error_handler(self.on_error)
         app.add_handler(CommandHandler("start", self.start))
         app.add_handler(CommandHandler("help", self.help))
@@ -187,7 +189,42 @@ class BridgeBot:
             update,
             "Request denied by allowlist. Check `allowed_user_ids` and `allowed_chat_ids` in `config.toml`.",
         )
+        await self._send_security_alert(
+            event_type="unauthorized_access",
+            update=update,
+            detail="request denied by allowlist",
+        )
         return True
+
+    async def _send_security_alert(self, *, event_type: str, update: Update, detail: str) -> None:
+        if not self.config.security_alert_chat_ids:
+            return
+        app = self._application
+        if app is None:
+            logger.debug("Security alert skipped because Telegram application is not initialized")
+            return
+        now = datetime.now(timezone.utc).isoformat()
+        chat_id = self._chat_id(update)
+        user_id = self._user_id(update)
+        text = (
+            "Security alert\n\n"
+            f"event: {event_type}\n"
+            f"time_utc: {now}\n"
+            f"host: {socket.gethostname()}\n"
+            f"user_id: {user_id}\n"
+            f"chat_id: {chat_id}\n"
+            f"detail: {detail[:500]}"
+        )
+        for target_chat_id in sorted(self.config.security_alert_chat_ids):
+            try:
+                await app.bot.send_message(chat_id=target_chat_id, text=text)
+            except TelegramError as exc:
+                logger.error(
+                    "Security alert failed target_chat_id=%s event=%s error=%s",
+                    target_chat_id,
+                    event_type,
+                    exc,
+                )
 
     async def _reply_text(
         self, update: Update, text: str, retries: int = 2, parse_mode: str | None = None
@@ -627,6 +664,11 @@ class BridgeBot:
                 active.last_message_at = datetime.now(timezone.utc)
                 self.db.upsert_binding(active)
         self._audit(update, "killswitch_changed", f"value={value}")
+        await self._send_security_alert(
+            event_type="killswitch_changed",
+            update=update,
+            detail=f"value={value}",
+        )
         await update.message.reply_text(f"Kill switch is now {value}.")
 
     async def trace_cmd(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -754,7 +796,7 @@ class BridgeBot:
         old_cfg = self.config
         self.config = new_cfg
         changed: list[str] = []
-        for field in ("allowed_user_ids", "allowed_chat_ids", "allowed_repo_roots", "blocked_paths",
+        for field in ("allowed_user_ids", "allowed_chat_ids", "security_alert_chat_ids", "allowed_repo_roots", "blocked_paths",
                       "codex", "copilot", "state_dir", "runner_timeout_seconds", "audit_enabled",
                       "deny_destructive_prompts"):
             if getattr(old_cfg, field) != getattr(new_cfg, field):
@@ -891,6 +933,11 @@ class BridgeBot:
                     active.last_message_at = datetime.now(timezone.utc)
                     self.db.upsert_binding(active)
             self._audit(update, "killswitch_changed", f"value={value}")
+            await self._send_security_alert(
+                event_type="killswitch_changed",
+                update=update,
+                detail=f"value={value}",
+            )
             await query.edit_message_text(f"Kill switch is now {value}.", reply_markup=_killswitch_keyboard())
 
         elif data in ("trace:on", "trace:off"):
@@ -933,6 +980,11 @@ class BridgeBot:
             return
         if self.config.deny_destructive_prompts and contains_destructive_intent(message):
             self._audit(update, "message_denied_destructive", message[:500])
+            await self._send_security_alert(
+                event_type="message_denied_destructive",
+                update=update,
+                detail=message[:500],
+            )
             await self._reply_text(
                 update,
                 "Prompt blocked by safety policy due to destructive command intent."

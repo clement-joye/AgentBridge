@@ -14,6 +14,7 @@ class SecurityTests(unittest.TestCase):
             telegram_bot_token="x",
             allowed_user_ids={1},
             allowed_chat_ids={1},
+            security_alert_chat_ids=set(),
             allowed_repo_roots=allowed_roots,
             blocked_paths=blocked_paths,
             codex=ProviderConfig(enabled=True),

@@ -1,6 +1,7 @@
 telegram_bot_token = "REPLACE_ME"
 allowed_user_ids = [123456789]
 allowed_chat_ids = [123456789]
+security_alert_chat_ids = [123456789]
 
 allowed_repo_roots = [
   "/home/me/dev",

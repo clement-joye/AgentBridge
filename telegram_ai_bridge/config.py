@@ -15,6 +15,7 @@ class BridgeConfig:
     telegram_bot_token: str
     allowed_user_ids: set[int]
     allowed_chat_ids: set[int]
+    security_alert_chat_ids: set[int]
     allowed_repo_roots: list[Path]
     blocked_paths: list[Path]
     codex: ProviderConfig
@@ -45,6 +46,7 @@ def load_config(path: str | Path) -> BridgeConfig:
         telegram_bot_token=token,
         allowed_user_ids=set(int(v) for v in raw.get("allowed_user_ids", [])),
         allowed_chat_ids=set(int(v) for v in raw.get("allowed_chat_ids", [])),
+        security_alert_chat_ids=set(int(v) for v in raw.get("security_alert_chat_ids", [])),
         allowed_repo_roots=to_path_list("allowed_repo_roots"),
         blocked_paths=to_path_list("blocked_paths"),
         codex=ProviderConfig(enabled=bool(raw.get("codex", {}).get("enabled", True))),
